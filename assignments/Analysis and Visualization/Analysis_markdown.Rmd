@@ -1,0 +1,680 @@
+---
+title: "analysis_chunks"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-11-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+
+library(plyr)
+library(rstatix) 
+library(effectsize)
+library(ggpubr)
+library(tidyverse)
+library(ez)
+library(reshape2)
+library(ggplot2)
+```
+
+
+```{r}
+############################## Data Preparation ####
+userPerformanceData <- read.csv("UserPerformance.csv", header=TRUE, sep = ",")
+summary(userPerformanceData)
+
+
+###### Remove P2 and P12
+userPerformanceData <-userPerformanceData[userPerformanceData$PID!=2,]
+userPerformanceData <-userPerformanceData[userPerformanceData$PID!=12,]
+
+
+### SUS
+SUS_Data <- read.csv("SUS.csv", header=TRUE, sep = ",")
+###### Remove P2 and P12
+SUS_Data <-SUS_Data[SUS_Data$UserId!=2,]
+SUS_Data <-SUS_Data[SUS_Data$UserId!=12,]
+summary(SUS_Data)
+
+
+### TLX
+TLX_Data <- read.csv("TLX.csv", header=TRUE, sep = ",")
+###### Remove P2 and P12
+TLX_Data <-TLX_Data[TLX_Data$UserId!=2,]
+TLX_Data <-TLX_Data[TLX_Data$UserId!=12,]
+summary(TLX_Data)
+
+
+### TLX
+MidQuestion_Data <- read.csv("Mid_Questionnaire.csv", header=TRUE, sep = ",")
+###### Remove P2 and P12
+MidQuestion_Data <-MidQuestion_Data[MidQuestion_Data$PID!="Me336",] #P2
+MidQuestion_Data <-MidQuestion_Data[MidQuestion_Data$PID!="Ka513",] #12
+summary(MidQuestion_Data)
+```
+```{r}
+####### Descriptive analysis
+
+## Get summary stats
+userPerformance_Descriptive <- userPerformanceData %>%
+  group_by(CoachingStyle) %>%
+  get_summary_stats(FootHeight, Steadiness, Mistake, type = "common")
+
+userPerformance_Descriptive
+
+
+userPerformance_Descriptive <- userPerformanceData %>%
+  group_by(CoachingStyle, Viewpoint) %>%
+  get_summary_stats(FootHeight, Steadiness, Mistake, type = "common")
+
+userPerformance_Descriptive
+
+### SUS
+SUS_Descriptive <- SUS_Data %>%
+  get_summary_stats(SUS, type = "common")
+
+SUS_Descriptive
+
+
+### TLX
+TLX_Descriptive <- TLX_Data %>%
+  group_by(Type) %>%
+  get_summary_stats(Score, type = "common")
+TLX_Descriptive
+
+### MidQuestion_Data
+MidQuestion_Descriptive <- MidQuestion_Data %>%
+  group_by(Coaching.Style, Viewpoint) %>%
+  get_summary_stats(Embodiment, Social_Presence, Enjoyment, Difficulty, PerceptionCoach, Recommendation, type = "common")
+
+MidQuestion_Descriptive
+```
+```{r}
+############################################
+#### Statistical analysis
+
+### ANOVA
+##### Assign User ID as a factor for analysis
+userPerformanceData$PID <- as.factor(userPerformanceData$PID)
+userPerformanceData$CoachingStyle <- as.factor(userPerformanceData$CoachingStyle)
+userPerformanceData$Viewpoint <- as.factor(userPerformanceData$Viewpoint)
+
+#Foot Height
+analysisData_Foot.aov <- ezANOVA(data = userPerformanceData, dv= FootHeight, wid = PID, within = .(Viewpoint, CoachingStyle), detailed = TRUE) #between = Foot, #Pose
+analysisData_Foot.aov
+
+
+#Steadiness
+analysisData_Steadiness.aov <- ezANOVA(data = userPerformanceData, dv= Steadiness, wid = PID, within = CoachingStyle * Viewpoint, detailed = TRUE)
+analysisData_Steadiness.aov
+
+
+#Mistake
+analysisData_Mistake.aov <- ezANOVA(data = userPerformanceData, dv= Mistake, wid = PID, within = CoachingStyle * Viewpoint, detailed = TRUE)
+analysisData_Mistake.aov
+
+
+##### Intepret effectsize
+interpret_cohens_d(0.0166139261, rules = "cohen1988")
+```
+```{r}
+
+######## Pairwise t tests
+
+#Steadiness
+userPerformanceData %>%
+  pairwise_t_test(Steadiness ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+userPerformanceData %>%
+  pairwise_t_test(Steadiness ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+
+userPerformanceData %>%
+  group_by(Viewpoint) %>%
+  pairwise_t_test(Steadiness ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+userPerformanceData %>%
+  group_by(CoachingStyle) %>%
+  pairwise_t_test(Steadiness ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+
+userPerformanceData %>%
+  group_by(Pose, Viewpoint) %>%
+  pairwise_t_test(Steadiness ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+userPerformanceData %>%
+  group_by(Pose, CoachingStyle) %>%
+  pairwise_t_test(Steadiness ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+
+```
+```{r}
+#Foot Height 
+
+userPerformanceData %>%
+  group_by(CoachingStyle) %>%
+  pairwise_t_test(FootHeight ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+
+userPerformanceData %>%
+  group_by(CoachingStyle, Pose) %>%
+  pairwise_t_test(FootHeight ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+userPerformanceData %>%
+  group_by(Viewpoint, Pose) %>%
+  pairwise_t_test(FootHeight ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+
+
+#Number of Mistakes
+userPerformanceData %>%
+  group_by(CoachingStyle, Pose) %>%
+  pairwise_t_test(Mistake ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+
+userPerformanceData %>%
+  group_by(Viewpoint, Pose) %>%
+  pairwise_t_test(Mistake ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+```
+```{r}
+
+############ Mid-Questionnaire Data
+
+#Enjoyment
+MidQuestion_Data %>%
+  pairwise_t_test(Enjoyment ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+#Difficulty
+MidQuestion_Data %>%
+  pairwise_t_test(Difficulty ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+#Embodiment
+MidQuestion_Data %>%
+  pairwise_t_test(Embodiment ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+#Social Presence
+MidQuestion_Data %>%
+  group_by(Viewpoint) %>%
+  pairwise_t_test(Social_Presence ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+#Perception
+MidQuestion_Data %>%
+  pairwise_t_test(PerceptionCoach ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+MidQuestion_Data %>%
+  group_by(Viewpoint) %>%
+  pairwise_t_test(PerceptionCoach ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+#Recommendation
+MidQuestion_Data %>%
+  pairwise_t_test(Recommendation ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+MidQuestion_Data %>%
+  group_by(Viewpoint) %>%
+  pairwise_t_test(Recommendation ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+```
+```{r}
+####################################################### Visualization ############################################
+
+### Rename columns
+userPerformanceData$CoachingStyle <- mapvalues(userPerformanceData$CoachingStyle, from = c("Autonomous Style", "Controlling Style"), to = c("Autonomous-Supportive Style", "Controlled Style"))
+
+### Rename
+userPerformanceData$CoachingStyleName <- mapvalues(userPerformanceData$CoachingStyle, from = c("Autonomous-Supportive Style", "Controlled Style"), to = c("Autonomous-SS.", "Controlled S."))
+
+
+stat_Score.test <- userPerformanceData %>%
+  group_by(CoachingStyle) %>%
+  pairwise_t_test(Steadiness ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+
+stat_Score.test <- stat_Score.test %>%
+  filter(p < 0.05) %>%
+  arrange(desc(CoachingStyle)) %>%
+  add_xy_position(x = "CoachingStyle")
+
+stat_Score.test1 <- userPerformanceData %>%
+  group_by(Viewpoint) %>%
+  pairwise_t_test(Steadiness ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+stat_Score.test1 <- stat_Score.test1 %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "CoachingStyle", group = "Viewpoint")
+
+stat_Score.test2 <- userPerformanceData %>%
+  pairwise_t_test(Steadiness ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+stat_Score.test2 <- stat_Score.test2 %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "CoachingStyle")
+```
+
+```{r}
+##################### User Performance
+# Steadiness
+newplot1 <- ggboxplot(
+  userPerformanceData, x = "CoachingStyleName", y = "Steadiness",
+  fill = "Viewpoint", palette = "Blues", #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  #ylim = c(1200, 1230),
+  size = .4, bxp.errorbar.width = 0.1, outlier.size = 0.5,
+) +
+  labs(x="", y = "Steadiness (m)") +
+  stat_summary(aes(fill= Viewpoint), position = position_dodge(width=.8), fun=mean, geom="point", shape=20, size=2, color="darkred",) +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12), legend.title = element_blank(), legend.position= "none")
+
+newplot1 <- newplot1 + stat_pvalue_manual(stat_Score.test, label = "p.adj.signif", position = position_dodge(0.8), y.position = 0.55)
+
+newplot1 <- newplot1 + stat_pvalue_manual(stat_Score.test1, label = "p.adj.signif", position = position_dodge(0.8), y.position = 0.60)
+
+newplot1 <- newplot1 + stat_pvalue_manual(stat_Score.test2, label = "p.adj.signif", position = position_dodge(0.8), y.position = 0.65)
+
+newplot1
+
+#Foot Height
+newplot2 <- ggboxplot(
+  userPerformanceData, x = "CoachingStyleName", y = "FootHeight",
+  fill = "Viewpoint", palette = "Blues", #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  #ylim = c(1200, 1230),
+  size = .4, bxp.errorbar.width = 0.1, outlier.size = 0.5,
+) +
+  labs(x="", y = "Foot Height (m)") +
+  stat_summary(aes(fill= Viewpoint), position = position_dodge(width=.8), fun=mean, geom="point", shape=20, size=2, color="darkred",) +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12), legend.title = element_blank(), legend.position= "none")
+
+newplot2
+
+#Mistakes
+newplot3 <- ggbarplot(
+  userPerformanceData, x = "CoachingStyleName", y = "Mistake",
+  fill = "Viewpoint", color = "black", palette = "Blues", 
+  position = position_dodge(0.7), #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  add = "mean_se", label = FALSE, lab.nb.digits = 2, lab.vjust = 4.2,
+) +
+  labs(x="", y = "Number of Mistakes") +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.873, .88)) axis.text.x = element_text(size = 12), 
+
+newplot3
+
+# Combine plots
+ggarrange(newplot1, newplot2, newplot3, ncol=3, nrow = 1, common.legend = TRUE)
+```
+```{r}
+##################### Pose Visualization -- Steadiness ################################
+### Rename columns
+userPerformanceData$PoseName <- mapvalues(userPerformanceData$Pose, from = c("1", "2", "3", "4", "5", "6"), to = c("Pose 1", "Pose 2", "Pose 3", "Pose 4", "Pose 5", "Pose 6"))
+
+####### Viewpoint
+stat_viewpoint.test <- userPerformanceData %>%
+  group_by(Pose) %>%
+  pairwise_t_test(Steadiness ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+stat_viewpoint.test <- stat_viewpoint.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "Pose")
+
+
+poseViewpointPlot <- ggboxplot(
+  userPerformanceData, x = "PoseName", y = "Steadiness",
+  fill = "Viewpoint", palette = "Blues", #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  #ylim = c(1200, 1230),
+  size = .4, bxp.errorbar.width = 0.1, outlier.size = 0.5,
+) +
+  labs(x="", y = "Steadiness (m)") +
+  stat_summary(aes(fill= Viewpoint), position = position_dodge(width=.8), fun=mean, geom="point", shape=20, size=2, color="darkred",) +
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.position= "top")
+
+poseViewpointPlot + stat_pvalue_manual(stat_viewpoint.test, label = "p.adj.signif", position = position_dodge(0.8), y.position = 0.55)
+
+```
+```{r}
+
+####### Coaching Style
+stat_style.test <- userPerformanceData %>%
+  group_by(Pose) %>%
+  pairwise_t_test(Steadiness ~ CoachingStyle, paired = TRUE, p.adjust.method = "bonf")
+
+stat_style.test <- stat_style.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "Pose")
+
+
+poseStylePlot <- ggboxplot(
+  userPerformanceData, x = "PoseName", y = "Steadiness",
+  fill = "CoachingStyle", palette = "BuGn", #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  #ylim = c(1200, 1230),
+  size = .4, bxp.errorbar.width = 0.1, outlier.size = 0.5,
+) +
+  labs(x="", y = "Steadiness (m)") +
+  stat_summary(aes(fill= CoachingStyle), position = position_dodge(width=.8), fun=mean, geom="point", shape=20, size=2, color="darkred",) +
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.position= "top")
+poseStylePlot + stat_pvalue_manual(stat_style.test, label = "p.adj.signif", position = position_dodge(0.8), y.position = 0.55)
+
+```
+```{r}
+######## Combine
+
+stat_combine.test <- userPerformanceData %>%
+  group_by(CoachingStyleName, PoseName) %>%
+  pairwise_t_test(Steadiness ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+stat_combine.test <- stat_combine.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "CoachingStyleName")
+
+
+stat_combine1.test <- userPerformanceData %>%
+  group_by(Viewpoint, PoseName) %>%
+  pairwise_t_test(Steadiness ~ CoachingStyleName, paired = TRUE, p.adjust.method = "bonf")
+
+stat_combine1.test <- stat_combine1.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position("CoachingStyleName", group = "Viewpoint")
+
+
+poseCombinedPlot <- ggboxplot(
+  userPerformanceData, x = "CoachingStyleName", y = "Steadiness", fill = "Viewpoint",
+  facet.by = "PoseName", palette = "Blues", #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  #ylim = c(1200, 1230),
+  size = .4, bxp.errorbar.width = 0.1, outlier.size = 0.5,
+) +
+  labs(x="", y = "Steadiness (m)") +
+  stat_summary(aes(fill= Viewpoint), position = position_dodge(width=.8), fun=mean, geom="point", shape=20, size=2, color="darkred",) +
+  theme_bw()+
+  theme( legend.title = element_blank(), legend.position= "top") #axis.text.x = element_text(size = 12),
+
+poseCombinedPlot <- poseCombinedPlot + stat_pvalue_manual(stat_combine.test, label = "p.adj.signif", y.position = 0.55)
+
+poseSteadinessPlot <- poseCombinedPlot + stat_pvalue_manual(stat_combine1.test, label = "p.adj.signif", y.position = 0.62)
+
+poseSteadinessPlot
+```
+```{r}
+##################### Pose Visualization -- Foot Height ################################
+
+
+stat_footpose.test <- userPerformanceData %>%
+  group_by(CoachingStyleName, PoseName) %>%
+  pairwise_t_test(FootHeight ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+stat_footpose.test <- stat_footpose.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "CoachingStyleName")
+
+
+stat_footpose1.test <- userPerformanceData %>%
+  group_by(Viewpoint, PoseName) %>%
+  pairwise_t_test(FootHeight ~ CoachingStyleName, paired = TRUE, p.adjust.method = "bonf")
+
+stat_footpose1.test <- stat_footpose1.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "CoachingStyleName", group = "Viewpoint")
+
+
+poseFootPlot <- ggboxplot(
+  userPerformanceData, x = "CoachingStyleName", y = "FootHeight", fill = "Viewpoint",
+  facet.by = "PoseName", 
+  palette = "Blues", #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  #ylim = c(1200, 1230),
+  size = .4, bxp.errorbar.width = 0.1, outlier.size = 0.5,
+) +
+  labs(x="", y = "Foot Height (m)") +
+  stat_summary(aes(fill= Viewpoint), position = position_dodge(width=.8), fun=mean, geom="point", shape=20, size=2, color="darkred",) +
+  theme_bw()+
+  theme( legend.title = element_blank(), legend.position= "top") #axis.text.x = element_text(size = 12),
+
+poseFootPlot <- poseFootPlot + stat_pvalue_manual(stat_footpose.test, label = "p.adj.signif", y.position = 0.55)
+
+poseFootHeightPlot <- poseFootPlot + stat_pvalue_manual(stat_footpose1.test, label = "p.adj.signif", y.position = 0.62, ) 
+
+poseFootHeightPlot
+
+# Combine plots
+ggarrange(poseSteadinessPlot, poseFootHeightPlot, ncol=2, nrow = 1, common.legend = TRUE)
+
+
+```
+```{r}
+
+##################### Pose Visualization -- Number of Mistake ################################
+
+stat_mistake.test <- userPerformanceData %>%
+  group_by(CoachingStyleName, PoseName) %>%
+  pairwise_t_test(Mistake ~ Viewpoint, paired = TRUE, p.adjust.method = "bonf")
+
+stat_mistake.test <- stat_mistake.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "CoachingStyleName")
+
+
+stat_mistake1.test <- userPerformanceData %>%
+  group_by(Viewpoint, PoseName) %>%
+  pairwise_t_test(Mistake ~ CoachingStyleName, paired = TRUE, p.adjust.method = "bonf")
+
+stat_mistake1.test <- stat_mistake1.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "CoachingStyleName", group = "Viewpoint")
+
+
+poseMistakePlot <- ggbarplot(
+  userPerformanceData, x = "CoachingStyleName", y = "Mistake",
+  fill = "Viewpoint", color = "black", palette = "Blues", facet.by = "PoseName", 
+  position = position_dodge(0.7), #order = c("Controlled Style", "Autonomous-Supportive Style"),
+  add = "mean_se", label = FALSE, lab.nb.digits = 2, lab.vjust = 4.2,
+) +
+  labs(x="", y = "Number of Mistakes") +
+  theme_bw()+
+  theme(legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.873, .88)) axis.text.x = element_text(size = 12), 
+
+poseMistakePlot <- poseMistakePlot + stat_pvalue_manual(stat_mistake.test, label = "p.adj.signif", y.position = 1.4, tip.length = .01)
+
+poseMistakePlot + stat_pvalue_manual(stat_mistake1.test, label = "p.adj.signif", y.position = 1.55, tip.length = .01) 
+
+
+
+```
+```{r}
+
+##################### TLX Questionnaire Data Visualization ################################
+TLX_Data$TypeName <- mapvalues(TLX_Data$Type, from = c("Mental Demand", "Physical Demand", "Temporal Demand", "Performance", "Effort", "Frustration"), to = c("Mental D.", "Physical D.", "Temporal D.", "Performance", "Effort", "Frustration"))
+
+#TLX
+ggbarplot(
+  TLX_Data, x = "TypeName", y = "Score", 
+  fill = "TypeName", palette = "Blues", 
+  position = position_dodge(.75), 
+  add = "mean_se", label = TRUE, lab.nb.digits = 2, lab.vjust = 4.5, #lab.size = 3,
+) +
+  labs(x="", y = "NASA TLX") +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12),legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "none") # c(.890, .88)) 
+
+
+```
+```{r}
+
+
+##################### Mid Questionnaire Data Visualization ################################
+
+
+#Embodiment
+
+Mid_plot1 <- ggbarplot(
+    MidQuestion_Data, x = "Coaching.Style", y = "Embodiment", 
+    fill = "Viewpoint", palette = "Blues", order = c("Autonomous-SS.", "Controlled S."),
+    position = position_dodge(.7), 
+    ylim = c(0, 7),
+    add = "mean_se", label = TRUE, lab.nb.digits = 2, lab.vjust = 2.5, #lab.size = 3,
+  ) +
+    labs(x="", y = "Embodiment") +
+    theme_bw()+
+    theme(axis.text.x = element_text(size = 12),legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.890, .88)) 
+
+Mid_plot1
+
+
+Mid_plot2 <- ggbarplot(
+  MidQuestion_Data, x = "Coaching.Style", y = "Social_Presence", 
+  fill = "Viewpoint", palette = "Blues", order = c("Autonomous-SS.", "Controlled S."),
+  position = position_dodge(.7), 
+  ylim = c(0, 7),
+  #ylim = c(-3, 3), 
+  add = "mean_se", label = TRUE, lab.nb.digits = 2, lab.vjust = 2.5, #lab.size = 3,
+) +
+  labs(x="", y = "Social Presence") +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12),legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.890, .88)) 
+
+Mid_plot2
+
+#### Enjoyment
+stat_enjoyment.test <- MidQuestion_Data %>%
+  pairwise_t_test(Enjoyment ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+stat_enjoyment.test <- stat_enjoyment.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "Coaching.Style")
+
+
+Mid_plot3 <- ggbarplot(
+  MidQuestion_Data, x = "Coaching.Style", y = "Enjoyment", 
+  fill = "Viewpoint", palette = "Blues", order = c("Autonomous-SS.", "Controlled S."),
+  position = position_dodge(.7), 
+  ylim = c(0, 5),
+  add = "mean_se", label = TRUE, lab.nb.digits = 2, lab.vjust = 2.5, #lab.size = 3,
+) +
+  labs(x="", y = "Enjoyment") +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12),legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.890, .88)) 
+
+Mid_plot3 <- Mid_plot3 + stat_pvalue_manual(stat_enjoyment.test, label = "p.adj.signif", y.position = 5, tip.length = .01) 
+
+Mid_plot3
+
+#Difficulty
+
+stat_difficulty.test <- MidQuestion_Data %>%
+  pairwise_t_test(Difficulty ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+stat_difficulty.test <- stat_difficulty.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "Coaching.Style")
+
+
+Mid_plot4 <- ggbarplot(
+  MidQuestion_Data, x = "Coaching.Style", y = "Difficulty", 
+  fill = "Viewpoint", palette = "Blues", order = c("Autonomous-SS.", "Controlled S."),
+  position = position_dodge(.7), 
+  ylim = c(0, 5),
+  add = "mean_se", label = TRUE, lab.nb.digits = 2, lab.vjust = 2.5, #lab.size = 3,
+) +
+  labs(x="", y = "Difficulty") +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12),legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.890, .88)) 
+
+Mid_plot4 <- Mid_plot4 + stat_pvalue_manual(stat_difficulty.test, label = "p.adj.signif", y.position = 3, tip.length = .01) 
+
+Mid_plot4
+
+#Perception
+
+stat_perception.test <- MidQuestion_Data %>%
+  pairwise_t_test(PerceptionCoach ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+stat_perception.test <- stat_perception.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "Coaching.Style")
+
+stat_perception.test11 <- MidQuestion_Data %>%
+  group_by(Viewpoint) %>%
+  pairwise_t_test(PerceptionCoach ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+stat_perception.test1 <- stat_perception.test11 %>%
+  filter(p < 0.05, Viewpoint == "First Person") %>%
+  add_xy_position(x = "Coaching.Style", group = "Viewpoint") 
+
+stat_perception.test2 <- stat_perception.test11 %>%
+  filter(p < 0.05, Viewpoint == "Third Person") %>%
+  add_xy_position(x = "Coaching.Style", group = "Viewpoint") 
+
+
+
+Mid_plot5 <- ggbarplot(
+  MidQuestion_Data, x = "Coaching.Style", y = "PerceptionCoach", 
+  fill = "Viewpoint", palette = "Blues", order = c("Autonomous-SS.", "Controlled S."),
+  position = position_dodge(.7), 
+  ylim = c(0, 5),
+  add = "mean_se", label = TRUE, lab.nb.digits = 2, lab.vjust = 2.5, #lab.size = 3,
+) +
+  labs(x="", y = "Perception of Coach") +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12),legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.890, .88)) 
+
+Mid_plot5 <- Mid_plot5 + stat_pvalue_manual(stat_perception.test, label = "p.adj.signif", y.position = 4.9, tip.length = .01) 
+Mid_plot5 <- Mid_plot5 + stat_pvalue_manual(stat_perception.test1, label = "p.adj.signif", y.position = 4.7, tip.length = .01) 
+Mid_plot5 <- Mid_plot5 + stat_pvalue_manual(stat_perception.test2, label = "p.adj.signif", y.position = 4.5, tip.length = .01) 
+
+Mid_plot5
+
+
+#Recommendation
+
+stat_recommend.test <- MidQuestion_Data %>%
+  pairwise_t_test(Recommendation ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+stat_recommend.test <- stat_recommend.test %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "Coaching.Style")
+
+stat_recommend.test1 <- MidQuestion_Data %>%
+  group_by(Viewpoint) %>%
+  pairwise_t_test(Recommendation ~ Coaching.Style, paired = TRUE, p.adjust.method = "bonf")
+
+stat_recommend.test1 <- stat_recommend.test1 %>%
+  filter(p < 0.05) %>%
+  add_xy_position(x = "Coaching.Style", group = "Viewpoint") 
+
+Mid_plot6 <- ggbarplot(
+  MidQuestion_Data, x = "Coaching.Style", y = "Recommendation", 
+  fill = "Viewpoint", palette = "Blues", order = c("Autonomous-SS.", "Controlled S."),
+  position = position_dodge(.7), 
+  ylim = c(0, 10.9),
+  add = "mean_se", label = TRUE, lab.nb.digits = 2, lab.vjust = 4.5, #lab.size = 3,
+) +
+  labs(x="", y = "Recommendation") +
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12),legend.title = element_blank(), legend.background = element_rect(fill = "transparent", color = NA), legend.position = "top") # c(.890, .88)) 
+
+Mid_plot6 <- Mid_plot6 + stat_pvalue_manual(stat_recommend.test, label = "p.adj.signif", y.position = 10.9, tip.length = .01) 
+Mid_plot6 <- Mid_plot6 + stat_pvalue_manual(stat_recommend.test1, label = "p.adj.signif", y.position = 10.4, tip.length = .01) 
+
+Mid_plot6
+
+# Combine plots
+ggarrange(Mid_plot2, Mid_plot1, Mid_plot3, Mid_plot4, Mid_plot5, Mid_plot6, ncol=3, nrow = 2, common.legend = TRUE)
+
+
+
+# Combine plots for Mid_plot2 and Mid_plot1
+#ggarrange(Mid_plot2, Mid_plot1, ncol=2, nrow = 1, common.legend = TRUE)
+
+
+```
+
